@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASFR </title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2ecc71;
+            --background-color: #f4f6f7;
+            --text-color: #2c3e50;
+            --accent-color: #e74c3c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header {
+            background: linear-gradient(to right, var(--primary-color), #6a11cb);
+            color: white;
+            padding: 30px 0;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .header i {
+            margin-right: 15px;
+            font-size: 2.5rem;
+        }
+
+        .video-section {
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        #videoCanvas {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            background-color: #f1f3f5;
+        }
+
+        #resultDisplay {
+            font-size: 1.5rem;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .access-granted {
+            background-color: var(--secondary-color);
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+
+        .try-again {
+            background-color: var(--accent-color);
+            color: white;
+            animation: shake 0.5s;
+        }
+
+        #debugInfo {
+            background-color: #ecf0f1;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: #7f8c8d;
+        }
+
+        .connection-status {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        .connection-status i {
+            margin-right: 10px;
+        }
+
+        .active { color: var(--secondary-color); }
+        .error { color: var(--accent-color); }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+            20%, 40%, 60%, 80% { transform: translateX(10px); }
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            .video-section {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>
+                <i class="fas fa-user-shield"></i>
+                Anti-spoofing Face Recognition
+            </h1>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="video-section">
+            <canvas id="videoCanvas" width="640" height="480"></canvas>
+            
+            <div id="resultDisplay">Waiting for authentication...</div>
+            
+            <div id="debugInfo">Initializing connection...</div>
+            
+            <div class="connection-status">
+                <i id="connectionIcon" class="fas fa-circle"></i>
+                <span id="connectionText">Not Connected</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('videoCanvas');
+        const ctx = canvas.getContext('2d');
+        const resultDisplay = document.getElementById('resultDisplay');
+        const debugInfo = document.getElementById('debugInfo');
+        const connectionIcon = document.getElementById('connectionIcon');
+        const connectionText = document.getElementById('connectionText');
+
+        function updateConnectionStatus(status, isActive) {
+            connectionIcon.className = `fas fa-circle ${isActive ? 'active' : 'error'}`;
+            connectionText.textContent = status;
+            connectionText.className = isActive ? 'active' : 'error';
+        }
+
+        function createWebSocket() {
+            const socket = new WebSocket('ws://localhost:8000/predict');
+
+            socket.onopen = () => {
+                console.log('WebSocket connection established');
+                resultDisplay.textContent = 'Authentication in progress...';
+                resultDisplay.className = '';
+                debugInfo.textContent = 'Waiting for face detection...';
+                updateConnectionStatus('Connected', true);
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    if (event.data instanceof Blob) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                canvas.width = img.width;
+                                canvas.height = img.height;
+                                ctx.drawImage(img, 0, 0);
+                            };
+                            img.onerror = () => {
+                                console.error('Error loading image');
+                                debugInfo.textContent = 'Image loading error';
+                            };
+                            img.src = e.target.result;
+                        };
+                        reader.readAsDataURL(event.data);
+                    } 
+                    else {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.final_result) {
+                            resultDisplay.textContent = `${data.final_result} (Avg Detection Time: ${data.avg_detection_time.toFixed(4)}s)`;
+                            resultDisplay.className = data.final_result === 'Access Granted' ? 'access-granted' : 'try-again';
+                            
+                            debugInfo.textContent = `Real Faces: ${data.real_count}, Spoof Attempts: ${data.spoof_count}`;
+                        } else if (data.length > 0) {
+                            const predictionText = data.map(pred => 
+                                `Face: ${pred.label} (${(pred.confidence * 100).toFixed(2)}%)`
+                            ).join(' | ');
+                            debugInfo.textContent = predictionText;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error processing message:', error);
+                    debugInfo.textContent = 'Processing error';
+                }
+            };
+
+            socket.onerror = (error) => {
+                console.error('WebSocket Error:', error);
+                resultDisplay.textContent = 'Connection Error';
+                resultDisplay.className = 'try-again';
+                debugInfo.textContent = 'Connection error occurred';
+                updateConnectionStatus('Disconnected', false);
+            };
+
+            socket.onclose = () => {
+                console.log('WebSocket connection closed');
+                resultDisplay.textContent = 'Connection Closed';
+                resultDisplay.className = 'try-again';
+                debugInfo.textContent = 'Reconnecting...';
+                updateConnectionStatus('Disconnected', false);
+
+                setTimeout(createWebSocket, 5000);
+            };
+
+            return socket;
+        }
+
+        const socket = createWebSocket();
+    </script>
+</body>
+</html>
